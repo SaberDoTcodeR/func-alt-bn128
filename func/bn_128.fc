@@ -1,0 +1,220 @@
+#pragma version >=0.2.0;
+#include "stdlib.fc";
+#include "FQ12.fc";
+
+
+(int, int) toAffinePoint(int x0, int y0, int z0) {
+    int z0Inv = inverse(z0);
+    int x1 = mulmod(x0, z0Inv);
+    int y1 = mulmod(y0, z0Inv);
+    return (x1, y1);
+}
+
+(int, int) zeroAffine() {
+    return (0, 0);
+}
+
+int isZeroCurve(int x0, int y0) {
+    if ((x0 == 0) & (y0 == 0)) {
+        return 1;
+    }
+    return 0;
+}
+
+(int, int, int) zeroProj() {
+    return (0, 0, 1);
+}
+
+(int, int, int) twiceProj(int x0, int y0, int z0) {
+    int t = 0;
+    int u = 0;
+    int v = 0;
+    int w = 0;
+
+    if (isZeroCurve(x0, y0)) {
+        return zeroProj();
+    }
+
+    u = mulmod(y0, z0);
+    u = mulmod(u, 2);
+
+    v = mulmod(u, x0);
+    v = mulmod(v, y0);
+    v = mulmod(v, 2);
+
+    x0 = mulmod(x0, x0);
+    t = mulmod(x0, 3);
+    z0 = mulmod(z0, z0);
+    z0 = mulmod(z0, _a);
+    t = addmod(t, z0);
+
+    w = mulmod(t, t);
+    x0 = mulmod(2, v);
+    w = addmod(w, _q - x0);
+
+    x0 = addmod(v, _q - w);
+    x0 = mulmod(t, x0);
+    y0 = mulmod(y0, u);
+    y0 = mulmod(y0, y0);
+    y0 = mulmod(2, y0);
+    int y1 = addmod(x0, _q - y0);
+
+    int x1 = mulmod(u, w);
+
+    int z1 = mulmod(u, u);
+    z1 = mulmod(z1, u);
+
+    return (x1, y1, z1);
+}
+
+
+
+(int, int, int) addProj2(int v, int u0, int u1, int t1, int t0) {
+    int u = 0;
+    int u2 = 0;
+    int u3 = 0;
+    int w = 0;
+    int t = 0;
+
+    t = addmod(t0, _q - t1);
+    u = addmod(u0, _q - u1);
+
+    u2 = mulmod(u, u);
+    w = mulmod(t, t);
+    w = mulmod(w, v);
+    u1 = addmod(u1, u0);
+    u1 = mulmod(u1, u2);
+    w = addmod(w, _q - u1);
+
+    int x2 = mulmod(u, w);
+
+    u3 = mulmod(u2, u);
+    u0 = mulmod(u0, u2);
+    u0 = addmod(u0, _q - w);
+    t = mulmod(t, u0);
+    t0 = mulmod(t0, u3);
+
+    int y2 = addmod(t, _q - t0);
+
+    int z2 = mulmod(u3, v);
+
+    return (x2, y2, z2);
+}
+
+(int, int, int) addProj(int x0, int y0, int z0, int x1, int y1, int z1) {
+    int t0 = 0;
+    int t1 = 0;
+    int u0 = 0;
+    int u1 = 0;
+
+    if (isZeroCurve(x0, y0)) {
+        return (x1, y1, z1);
+    }
+    if (isZeroCurve(x1, y1)) {
+        return (x0, y0, z0);
+    }
+
+    t0 = mulmod(y0, z1);
+    t1 = mulmod(y1, z0);
+
+    u0 = mulmod(x0, z1);
+    u1 = mulmod(x1, z0);
+
+    if (u0 == u1) {
+        if (t0 == t1) {
+            return twiceProj(x0, y0, z0);
+        }
+                else {
+                    return zeroProj();
+                }
+    }
+
+    return addProj2(mulmod(z0, z1), u0, u1, t1, t0);
+}
+
+(int, int) add(int x0, int y0, int x1, int y1) {
+    int z0 = 1;
+    (x0, y0, z0) = addProj(x0, y0, 1, x1, y1, 1);
+    return toAffinePoint(x0, y0, z0);
+}
+
+(int, int) twice(int x0, int y0) {
+    int z0 = 1;
+    (x0, y0, z0) = twiceProj(x0, y0, 1);
+    return toAffinePoint(x0, y0, z0);
+}
+
+
+(int, int) multiplyScalar(int x0, int y0, int scalar) {
+    if (scalar == 0) {
+        return zeroAffine();
+    }
+    if (scalar == 1) {
+        return (x0, y0);
+    }
+    if (scalar == 2) {
+        return twice(x0, y0);
+    }
+
+    int base2X = x0;
+    int base2Y = y0;
+    int base2Z = 1;
+    int z1 = 1;
+    int x1 = x0;
+    int y1 = y0;
+
+    if (scalar % 2 == 0) {
+        x1 = y1 = 0;
+    }
+
+    scalar = scalar >> 1;
+
+    while (scalar > 0) {
+        (base2X, base2Y, base2Z) = twiceProj(base2X, base2Y, base2Z);
+
+        if (scalar % 2 == 1) {
+            (x1, y1, z1) = addProj(base2X, base2Y, base2Z, x1, y1, z1);
+        }
+
+        scalar = scalar >> 1;
+    }
+
+    return toAffinePoint(x1, y1, z1);
+}
+
+
+(int, int) negative(int x, int y) {
+    if(isZeroCurve(x, y)) {
+        return zeroAffine();
+    }
+    return (x, _q - (y % _q));
+}
+
+
+
+
+
+(tuple, tuple) twist(tuple x, tuple y) impure {
+
+    tuple x0 = empty_tuple();
+    tuple y0 = empty_tuple();
+
+    x0~tpush(addmod(first(x), _q - mulmod(9, second(x))));
+    x0~tpush(second(x));
+    y0~tpush(addmod(first(y), _q - mulmod(9, second(y))));
+    y0~tpush(second(y));
+    tuple nx = unsafe_tuple([first(x0), 0, 0, 0, 0, 0, second(x0), 0, 0, 0, 0, 0]);
+    tuple ny = unsafe_tuple([first(y0), 0, 0, 0, 0, 0, second(y0), 0, 0, 0, 0, 0]);
+
+
+    tuple w_2 = unsafe_tuple([0,0,1,0,0,0,0,0,0,0,0,0]);
+
+    tuple w_3 = unsafe_tuple([0,0,0,1,0,0,0,0,0,0,0,0]);
+
+    return (fq12_mul_tuple(nx, w_2), fq12_mul_tuple(ny, w_3));
+}
+
+
+
+
+
